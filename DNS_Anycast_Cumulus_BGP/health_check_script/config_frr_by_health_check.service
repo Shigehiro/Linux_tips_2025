@@ -1,0 +1,14 @@
+[Unit]
+Description=Config_FRR_by_health_check
+After=frr.service
+
+[Service]
+ExecStartPre=/usr/bin/sleep 5
+ExecStart=/usr/bin/python3 /root/health_check_daemonize.py -s 169.254.0.1 -t A -q www.google.com -a 169.254.0.1 -as 64513 -i 15
+ExecStartPost=/usr/bin/python3 /root/del_bgp_path.py -as 64513 -a 169.254.0.1
+Restart=always
+Type=forking
+PIDFile=/var/run/config_frr_health_check.pid
+
+[Install]
+WantedBy=multi-user.target

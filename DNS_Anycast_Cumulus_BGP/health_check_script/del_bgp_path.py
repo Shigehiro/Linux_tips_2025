@@ -47,12 +47,15 @@ def check_process_staus(name):
 
 def post_setup():
     counter = 0
-    while True:
+    if counter < 5:
         if check_process_staus(name='frr.service') and counter < 3:
             del_bgp_path()
             sys.exit()
-        elif counter < 3:
+        elif counter < 5:
             counter += 1
+            time.sleep(1)
+        elif counter > 5:
+            sys.exit()
 
 if __name__ == '__main__':
     post_setup()

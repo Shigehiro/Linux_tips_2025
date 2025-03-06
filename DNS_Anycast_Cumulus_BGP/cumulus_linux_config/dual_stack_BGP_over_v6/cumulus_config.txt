@@ -1,0 +1,136 @@
+- header:
+    model: vx
+    nvue-api-version: nvue_v1
+    rev-id: 1.0
+    version: Cumulus Linux 5.12.0
+- set:
+    acl: {}
+    interface:
+      eth0:
+        ip:
+          address:
+            dhcp: {}
+          vrf: mgmt
+        type: eth
+      swp1:
+        ip:
+          address:
+            192.168.110.254/24: {}
+          gateway:
+            192.168.110.253: {}
+        link:
+          state:
+            up: {}
+      swp1-3:
+        acl: {}
+        link:
+          mtu: 1500
+        type: swp
+      swp2:
+        ip:
+          address:
+            10.33.33.254/24: {}
+            2001:0DB8:a::254/64: {}
+      swp3:
+        ip:
+          address:
+            10.33.34.254/24: {}
+            2001:0DB8:b::254/64: {}
+    router:
+      bgp:
+        autonomous-system: 64512
+        enable: on
+        router-id: 10.33.34.254
+    service:
+      ntp:
+        mgmt:
+          server:
+            0.cumulusnetworks.pool.ntp.org: {}
+            1.cumulusnetworks.pool.ntp.org: {}
+            2.cumulusnetworks.pool.ntp.org: {}
+            3.cumulusnetworks.pool.ntp.org: {}
+    system:
+      aaa:
+        class:
+          nvapply:
+            action: allow
+            command-path:
+              /:
+                permission: all
+          nvshow:
+            action: allow
+            command-path:
+              /:
+                permission: ro
+          sudo:
+            action: allow
+            command-path:
+              /:
+                permission: all
+        role:
+          nvue-admin:
+            class:
+              nvapply: {}
+          nvue-monitor:
+            class:
+              nvshow: {}
+          system-admin:
+            class:
+              nvapply: {}
+              sudo: {}
+        user:
+          cumulus:
+            full-name: cumulus,,,
+            hashed-password: '*'
+            role: system-admin
+      api:
+        state: enabled
+      config:
+        auto-save:
+          state: enabled
+      control-plane:
+        acl:
+          acl-default-dos:
+            inbound: {}
+          acl-default-whitelist:
+            inbound: {}
+      hostname: cumulus
+      nat:
+        mode: dynamic
+      reboot:
+        mode: cold
+      ssh-server:
+        state: enabled
+      wjh:
+        channel:
+          forwarding:
+            trigger:
+              l2: {}
+              l3: {}
+              tunnel: {}
+        enable: on
+    vrf:
+      default:
+        router:
+          bgp:
+            address-family:
+              ipv4-unicast:
+                enable: on
+              ipv6-unicast:
+                enable: on
+            enable: on
+            neighbor:
+              2001:db8:b::10:
+                address-family:
+                  ipv6-unicast:
+                    enable: on
+                password: $nvsec$929ec7be9e52e78079cbbcd042fb7497
+                remote-as: external
+                type: numbered
+              2001:db8:b::20:
+                address-family:
+                  ipv6-unicast:
+                    enable: on
+                password: $nvsec$929ec7be9e52e78079cbbcd042fb7497
+                remote-as: external
+                type: numbered

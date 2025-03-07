@@ -4,15 +4,19 @@
   - [Description](#description)
   - [Reference](#reference)
   - [Tested environment](#tested-environment)
+  - [Tested software version](#tested-software-version)
   - [Configuration](#configuration)
-    - [DNS Server](#dns-server)
-      - [Only IPv4](#only-ipv4)
-        - [Configure the anycast IP in the loopback address, install frr, enable BGP.](#configure-the-anycast-ip-in-the-loopback-address-install-frr-enable-bgp)
-        - [Configure frr](#configure-frr)
-        - [Cumulus Linux](#cumulus-linux)
-      - [IPv4, IPv6 dual stack, exchange routing information of both IPv4 and IPv6 with BGP over IPv6 addresses](#ipv4-ipv6-dual-stack-exchange-routing-information-of-both-ipv4-and-ipv6-with-bgp-over-ipv6-addresses)
-        - [DNS servers](#dns-servers)
-        - [Cumulus Linux](#cumulus-linux-1)
+    - [Only IPv4](#only-ipv4)
+      - [DNS Server](#dns-server)
+      - [Configure the anycast IP in the loopback address, install frr, enable BGP.](#configure-the-anycast-ip-in-the-loopback-address-install-frr-enable-bgp)
+      - [Configure frr](#configure-frr)
+      - [Cumulus Linux](#cumulus-linux)
+    - [IPv4, IPv6 dual stack, exchange routing information of both IPv4 and IPv6 with BGP over IPv6 addresses](#ipv4-ipv6-dual-stack-exchange-routing-information-of-both-ipv4-and-ipv6-with-bgp-over-ipv6-addresses)
+      - [DNS servers](#dns-servers)
+      - [Cumulus Linux](#cumulus-linux-1)
+    - [IPv4 and IPv6 dual stack: exchange routing information of IPv4 with BGP over IPv4 and of IPv6 with BGP over IPv6](#ipv4-and-ipv6-dual-stack-exchange-routing-information-of-ipv4-with-bgp-over-ipv4-and-of-ipv6-with-bgp-over-ipv6)
+      - [DNS servers](#dns-servers-1)
+      - [Cumulus LInux](#cumulus-linux-2)
   - [Confirm ECMP works](#confirm-ecmp-works)
   - [Add or remove the route path over BGP based on the application health check result](#add-or-remove-the-route-path-over-bgp-based-on-the-application-health-check-result)
     - [edit frr.service unit file](#edit-frrservice-unit-file)
@@ -69,19 +73,29 @@ The Cumulus and two DNS servers exchange the routing information via BGP.<br>
 <br>When the client sends DNS queries to **169.254.0.1 or 2001:0DB8:c::1**, Cumulus routes them to either **DNS01** or **DNS02** using **ECMP**.<br>
 DNS01 and DNS02 have the same AS number.
 
+## Tested software version
+
+- DNS server
+  - Rocky Linux release 9.5 (Blue Onyx)
+  - frr-8.5.3-4.el9.x86_64
+
+= Cumulus Linux
+  - Cumulus Linux 5.12.0 
+
 ## Configuration
 
-### DNS Server
+### Only IPv4
 
-#### Only IPv4
+#### DNS Server
 
 You can find the config under:
 - DNS servers
-  - dns01_02_frr_config/v4_only/
+  - [dns01 frr config](./dns01_02_frr_config/v4_only/frr_dns01.conf)
+  - [dns02 frr config](./dns01_02_frr_config/v4_only/frr_dns02.conf)
 - Cumulus Linux
-  - cumulus_linux_config/v4_only/
+  - [cumulus config](./cumulus_linux_config/v4_only/cumulus_config.txt)
 
-##### Configure the anycast IP in the loopback address, install frr, enable BGP.
+#### Configure the anycast IP in the loopback address, install frr, enable BGP.
 
 Configure the anycast IPv4
 ```
@@ -109,7 +123,7 @@ Start frr
 ansible -i inventory.ini all -m shell -a 'systemctl enable frr.service --now'
 ```
 
-##### Configure frr
+#### Configure frr
 
 DNS01
 ```
@@ -171,7 +185,7 @@ exit
 [root@dns02 ~]#
 ```
 
-##### Cumulus Linux
+#### Cumulus Linux
 
 ```
 cumulus@switch:~$ nv set router bgp autonomous-system 64512
@@ -294,15 +308,15 @@ exit-address-family
 cumulus@cumulus:mgmt:~$
 ```
 
-#### IPv4, IPv6 dual stack, exchange routing information of both IPv4 and IPv6 with BGP over IPv6 addresses
+### IPv4, IPv6 dual stack, exchange routing information of both IPv4 and IPv6 with BGP over IPv6 addresses
 
-You can find the config under:
 - DNS servers
-  - dns01_02_frr_config/dual_stack_BGP_over_v6/
+  - [dns01 frr config](./dns01_02_frr_config/dual_stack_BGP_over_v6/frr.conf.dns01)
+  - [dns02 frr config](./dns01_02_frr_config/dual_stack_BGP_over_v6/frr.conf.dns02)
 - Cumulus Linux
-  - cumulus_linux_config/dual_stack_BGP_over_v6/
+  - [cumulus config](./cumulus_linux_config/dual_stack_BGP_over_v6/cumulus_config.txt)
 
-##### DNS servers
+#### DNS servers
 
 I configured anycast addresses as a dummy interface instead of loopback interface.
 ```
@@ -350,7 +364,7 @@ dns02 | CHANGED | rc=0 >>
     inet6 fe80::b0ba:4ed4:536a:31c6/64 scope link noprefixroute
 ```
 
-##### Cumulus Linux
+#### Cumulus Linux
 
 ```
 cumulus@cumulus:mgmt:~$ nv show vrf default router rib ipv4 route 169.254.0.1/32
@@ -381,6 +395,29 @@ route-entry
     1         bgp       254    339    20        0       fe80::4ee7:b222:7453:9ce9  swp3             1       iA   
                                                         fe80::8b7b:fa30:1886:3186  swp3             1       iA   
 cumulus@cumulus:mgmt:~$ 
+```
+
+### IPv4 and IPv6 dual stack: exchange routing information of IPv4 with BGP over IPv4 and of IPv6 with BGP over IPv6
+
+#### DNS servers
+
+See the config:
+- [dns01 frr config](./dns01_02_frr_config/all_dual_stack/frr.conf.dns01)
+- [dns02 frr config](./dns01_02_frr_config/all_dual_stack/frr.conf.dns02)
+
+#### Cumulus LInux
+
+See the config:
+- [cumulus config](./cumulus_linux_config/all_dual_stack/cumulus_config.txt)
+
+
+<br>BGP sessions.
+```
+cumulus@cumulus:mgmt:~$ ss -tanp |grep 179 |grep ^ESTAB
+ESTAB     0      0              10.33.34.254:179        10.33.34.20:39391
+ESTAB     0      0              10.33.34.254:179        10.33.34.10:34759
+ESTAB     0      0         [2001:db8:b::254]:179   [2001:db8:b::10]:40411
+ESTAB     0      0         [2001:db8:b::254]:179   [2001:db8:b::20]:32783
 ```
 
 ## Confirm ECMP works
@@ -429,7 +466,7 @@ Anycast IPs will be added after passing the health check by the monitor script.
 ```
 # cat /etc/systemd/system/frr.service.d/override.conf
 [Service]
-ExecStartPre=/usr/bin/python3 /root/del_anycast_ip_frr.py -a 169.254.0.1,2001:db8:c::1[root@dns01 ~]#
+ExecStartPre=/usr/bin/python3 /root/del_anycast_ip_frr.py -a 169.254.0.1,2001:db8:c::1
 ```
 
 ### run the monitor script as daemon

@@ -1,0 +1,40 @@
+frr version 8.5.3
+frr defaults traditional
+hostname dns02
+log syslog informational
+no ip forwarding
+no ipv6 forwarding
+!
+router bgp 64513
+ bgp router-id 10.33.34.20
+ no bgp default ipv4-unicast
+ neighbor 10.33.34.254 remote-as 64512
+ neighbor 10.33.34.254 password password
+ neighbor 10.33.34.254 update-source 10.33.34.20
+ neighbor 2001:db8:b::254 remote-as 64512
+ neighbor 2001:db8:b::254 password password
+ neighbor 2001:db8:b::254 update-source 2001:db8:b::20
+ !
+ address-family ipv4 unicast
+  network 169.254.0.1/32
+  neighbor 10.33.34.254 activate
+  neighbor 10.33.34.254 soft-reconfiguration inbound
+  neighbor 10.33.34.254 route-map route-map-from-peers in
+  neighbor 10.33.34.254 route-map route-map-to-peers out
+ exit-address-family
+ !
+ address-family ipv6 unicast
+  network 2001:db8:c::1/128
+  neighbor 2001:db8:b::254 activate
+  neighbor 2001:db8:b::254 soft-reconfiguration inbound
+  neighbor 2001:db8:b::254 route-map route-map-from-peers in
+  neighbor 2001:db8:b::254 route-map route-map-to-peers out
+ exit-address-family
+exit
+!
+route-map route-map-from-peers permit 9999
+exit
+!
+route-map route-map-to-peers permit 9999
+exit
+!

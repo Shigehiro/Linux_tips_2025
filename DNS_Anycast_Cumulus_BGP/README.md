@@ -461,6 +461,7 @@ Add the health check script to add or remove the route path over BGP based on th
 
 Copy del_anycast_ip_frr.py under /root directory.<br>
 Add the python script at ExecStartPre.<br>
+You can find the python script [at](./health_check_script/del_anycast_ip_frr.py)<br>
 This script deletes anycast IPs when starting up frr daemon.<br>
 Anycast IPs will be added after passing the health check by the monitor script.
 ```
@@ -470,14 +471,17 @@ ExecStartPre=/usr/bin/python3 /root/del_anycast_ip_frr.py -a 169.254.0.1,2001:db
 ```
 
 ### run the monitor script as daemon
+
 Copy health_check_daemonize.py under /root directory.<br>
+You can find the script [at](./health_check_script/health_check_daemonize.py)
 This script adds or removes anycast IPs based on the results of health checking.
 ```
 # ls /root/*.py
 /root/del_bgp_path.py  /root/health_check_daemonize.py
 ```
 
-Copy the unit filer config_frr_by_health_check.service under /usr/lib/systemd/system/ and issue daemon-reload to reflect that.
+Copy the unit filer config_frr_by_health_check.service under /usr/lib/systemd/system/ and issue daemon-reload to reflect that.<br>
+You can find the unit file [at](./health_check_script/config_frr_by_health_check.service)
 ```
 # cp config_frr_by_health_check.service /usr/lib/systemd/system
 ```

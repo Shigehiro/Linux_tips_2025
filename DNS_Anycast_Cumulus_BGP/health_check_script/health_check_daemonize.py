@@ -15,18 +15,29 @@ import subprocess
 parser = argparse.ArgumentParser()
 parser.add_argument('-q', '--qname', type=str, required=True, help='Specify a query name')
 parser.add_argument('-t', '--type', type=str, default='A', help='Specify a query type. Default A')
-parser.add_argument('-s', '--server', type=str, default='127.0.0.1', help='Specify a server IP address. Default 127.0.0.1')
 parser.add_argument('-a', '--anycast_ip', type=str, required=True, help='Specify an Anycast IP')
 parser.add_argument('-as', '--as_number', type=int, required=True, help='Specify a BGP AS number')
 parser.add_argument('-i', '--interval', type=int, default=15, help='Specify a check interval. default 15 seconds')
 args = parser.parse_args()
 qname = args.qname
 qtype = args.type
-server = args.server
-anycast_ip = args.anycast_ip
+anycast_ip = args.anycast_ip.split(',')
 as_number = args.as_number
 interval = args.interval
 timeout = 3
+
+def make_anycast_ip_list():
+    ipv4_list = list()
+    ipv6_list = list()
+    anycast_ip_list = dict()
+    for ip in anycast_ip:
+        if '.' in ip:
+            ipv4_list.append(ip)
+        elif ':' in ip:
+            ipv6_list.append(ip)
+    anycast_ip_list['ipv4'] = ipv4_list
+    anycast_ip_list['ipv6'] = ipv6_list
+    return anycast_ip_list
 
 def send_query(qname, rdtype, server, protocol='udp'):
     # Construct a query
@@ -52,41 +63,72 @@ def send_query(qname, rdtype, server, protocol='udp'):
 
     return health_result
 
-def add_bgp_path():
-    vtysh_cmd = '/usr/bin/vtysh -f /tmp/vtysh.conf'
+def update_route_vtysh(ip, as_number, operation, address_family):
+    vtysh_cmd = '/usr/bin/vtysh -f /tmp/vtysh_health.conf'
 
-    command_text = f"""
-    router bgp {as_number}
-    address-family ipv4 unicast
-    network {anycast_ip}/32
-    exit
-    exit
-    exit
-    write memory
-    exit
-    """
+    if operation == 'delete' and address_family == 'ipv4':
+        command_text = f"""
+        router bgp {as_number}
+        address-family ipv4 unicast
+        no network {ip}/32
+        exit
+        exit
+        exit
+        write memory
+        exit
+        """
 
-    with open('/tmp/vtysh.conf', 'w') as f:
-        f.write(command_text)
-    subprocess.run(vtysh_cmd.split(), stdout=subprocess.PIPE, stderr = subprocess.PIPE)
+        with open('/tmp/vtysh_health.conf', 'w') as f:
+            f.write(command_text)
+        subprocess.run(vtysh_cmd.split(), stdout=subprocess.PIPE, stderr = subprocess.PIPE)
 
-def del_bgp_path():
-    vtysh_cmd = '/usr/bin/vtysh -f /tmp/vtysh.conf'
+    elif operation == 'add' and address_family == 'ipv4':
+        command_text = f"""
+        router bgp {as_number}
+        address-family ipv4 unicast
+        network {ip}/32
+        exit
+        exit
+        exit
+        write memory
+        exit
+        """
 
-    command_text = f"""
-    router bgp {as_number}
-    address-family ipv4 unicast
-    no network {anycast_ip}/32
-    exit
-    exit
-    exit
-    write memory
-    exit
-    """
+        with open('/tmp/vtysh_health.conf', 'w') as f:
+            f.write(command_text)
+        subprocess.run(vtysh_cmd.split(), stdout=subprocess.PIPE, stderr = subprocess.PIPE)
 
-    with open('/tmp/vtysh.conf', 'w') as f:
-        f.write(command_text)
-    subprocess.run(vtysh_cmd.split(), stdout=subprocess.PIPE, stderr = subprocess.PIPE)
+    elif operation == 'delete' and address_family == 'ipv6':
+        command_text = f"""
+        router bgp {as_number}
+        address-family ipv6 unicast
+        no network {ip}/128
+        exit
+        exit
+        exit
+        write memory
+        exit
+        """
+
+        with open('/tmp/vtysh_health.conf', 'w') as f:
+            f.write(command_text)
+        subprocess.run(vtysh_cmd.split(), stdout=subprocess.PIPE, stderr = subprocess.PIPE)
+
+    elif operation == 'add' and address_family == 'ipv6':
+        command_text = f"""
+        router bgp {as_number}
+        address-family ipv6 unicast
+        network {ip}/128
+        exit
+        exit
+        exit
+        write memory
+        exit
+        """
+
+        with open('/tmp/vtysh_health.conf', 'w') as f:
+            f.write(command_text)
+        subprocess.run(vtysh_cmd.split(), stdout=subprocess.PIPE, stderr = subprocess.PIPE)
 
 def check_process_status(name):
     command = f"systemctl is-active {name}"
@@ -97,7 +139,6 @@ def check_process_status(name):
         return False
 
 def check_ip_in_frr_config(find_string):
-    #out = subprocess.run(f"/usr/bin/vtysh -c show run | grep {find_string}", shell=True)
     ps1 = subprocess.Popen(['/usr/bin/vtysh', '-c', 'show run'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     ps2 = subprocess.Popen(['grep', find_string], stdin=ps1.stdout, stdout=subprocess.PIPE)
     ps1.stdout.close()
@@ -110,39 +151,44 @@ def check_ip_in_frr_config(find_string):
         return False
 
 def config_frr_by_health_check():
+    anycast_ip_list = make_anycast_ip_list()
+
     while True:
-        udp_result = False
-        tcp_result = False
+        for address_family ,address_list in anycast_ip_list.items():
+            for ip in address_list:
 
-        try:
-            # Try the UDP health check
-            udp_result = send_query(qname=qname, rdtype=qtype, server=server)
+                udp_result = False
+                tcp_result = False
 
-            # If the UDP health check is successful, try the TCP health check.
-            if udp_result:
-                tcp_result = send_query(qname=qname, rdtype=qtype, server=server, protocol='tcp')
+                try:
+                    # Try the UDP health check
+                    udp_result = send_query(qname=qname, rdtype=qtype, server=ip)
 
-            # Add the anycast IP in BGP
-            if udp_result and tcp_result:
-                # frr is running and the anycast IP does not exist in the running config, add the BGP path
-                if check_process_status(name='frr.service') and not check_ip_in_frr_config(find_string=anycast_ip):
-                    add_bgp_path()
-                # frr is running and the anycast IP exists in the running config, do nothing
-                elif check_process_status(name='frr.service') and check_ip_in_frr_config(find_string=anycast_ip):
+                    # If the UDP health check is successful, try the TCP health check.
+                    if udp_result:
+                        tcp_result = send_query(qname=qname, rdtype=qtype, server=ip, protocol='tcp')
+
+                    # Add the anycast IP in BGP
+                    if udp_result and tcp_result:
+                        # frr is running and the anycast IP does not exist in the running config, add the BGP path
+                        if check_process_status(name='frr.service') and not check_ip_in_frr_config(find_string=ip):
+                            update_route_vtysh(ip=ip, as_number=as_number, operation='add', address_family=address_family)
+                        # frr is running and the anycast IP exists in the running config, do nothing
+                        elif check_process_status(name='frr.service') and check_ip_in_frr_config(find_string=ip):
+                            pass
+                        
+                    # Delete the anycast IP from BGP
+                    else:
+                        # frr is running and the anycast IP exists in the running config, delete the BGP path
+                        if check_process_status(name='frr.service') and check_ip_in_frr_config(find_string=ip):
+                            update_route_vtysh(ip=ip, as_number=as_number, operation='delete', address_family=address_family)
+                        # frr is running and the anycast IP does not exist in the running config, do nothing
+                        elif check_process_status(name='frr.service') and not check_ip_in_frr_config(find_string=ip):
+                            pass
+                except:
                     pass
-                
-            # Delete the anycast IP from BGP
-            else:
-                # frr is running and the anycast IP exists in the running config, delete the BGP path
-                if check_process_status(name='frr.service') and check_ip_in_frr_config(find_string=anycast_ip):
-                    del_bgp_path()
-                # frr is running and the anycast IP does not exist in the running config, do nothing
-                elif check_process_status(name='frr.service') and not check_ip_in_frr_config(find_string=anycast_ip):
-                    pass
-        except:
-            pass
-        finally:
-            time.sleep(interval)
+                finally:
+                    time.sleep(interval)
 
 # fork
 def daemonize():

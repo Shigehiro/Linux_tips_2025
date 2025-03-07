@@ -15,7 +15,9 @@
     - [Cumulus Linux](#cumulus-linux-1)
   - [Confirm ECMP works](#confirm-ecmp-works)
   - [Add or remove the route path over BGP based on the application health check result](#add-or-remove-the-route-path-over-bgp-based-on-the-application-health-check-result)
-  - [Logs](#logs)
+    - [edit frr.service unit file](#edit-frrservice-unit-file)
+    - [run the monitor script as daemon](#run-the-monitor-script-as-daemon)
+  - [frr logs](#frr-logs)
   - [Use dummy interface instead of loopback interface](#use-dummy-interface-instead-of-loopback-interface)
 
 ## Description
@@ -27,7 +29,6 @@ Here is how to configure DNS Anycast with Cumulus Linux.
 - [Border Gateway Protocol - BGP](https://docs.nvidia.com/networking-ethernet-software/cumulus-linux-512/Layer-3/Border-Gateway-Protocol-BGP/#)
 - [Equal Cost Multipath Load Sharing](https://docs.nvidia.com/networking-ethernet-software/cumulus-linux-512/Layer-3/Routing/Equal-Cost-Multipath-Load-Sharing/)
 - [Troubleshooting BGP](https://docs.nvidia.com/networking-ethernet-software/cumulus-linux-512/Layer-3/Border-Gateway-Protocol-BGP/Troubleshooting-BGP/)
-- [IPv4/IPv6の両方の通信を試験可能なFRRoutingのdocker composeサンプル](IPv4/IPv6の両方の通信を試験可能なFRRoutingのdocker composeサンプル)
 
 ## Tested environment
 
@@ -35,6 +36,7 @@ All nodes are running as virtual machines under KVM.
 ```
 
 10.33.33.0/24                     10.33.34.0/24
+2001:0DB8:a::/64                  2001:0DB8:b::/64
 <------------------------->    <----------------->
 Client 10 --- SW --- 254 Cumulus 254 --- SW --- 10 DNS01
                                             --- 20 DNS02
@@ -64,7 +66,7 @@ The Cumulus and two DNS servers exchange the routing information via BGP.<br>
 - AS Number of Cumulus : 64512
 - AS Number of DNS01, DNS02 : 64513
 
-<br>When the client sends DNS queries to **169.254.0.1**, Cumulus routes them to either **DNS01** or **DNS02** using **ECMP**.<br>
+<br>When the client sends DNS queries to **169.254.0.1 or 2001:0DB8:c::1**, Cumulus routes them to either **DNS01** or **DNS02** using **ECMP**.<br>
 DNS01 and DNS02 have the same AS number.
 
 ## Configuration
@@ -418,7 +420,21 @@ Send DNS queries to the anycast IP from the client.
 
 Add the health check script to add or remove the route path over BGP based on the DNS health check result.<br>
 
-Copy health_check_daemonize.py and del_bgp_path.py under /root directory.
+### edit frr.service unit file
+
+Copy del_anycast_ip_frr.py under /root directory.<br>
+Add the python script at ExecStartPre.<br>
+This script deletes anycast IPs when starting up frr daemon.<br>
+Anycast IPs will be added after passing the health check by the monitor script.
+```
+# cat /etc/systemd/system/frr.service.d/override.conf
+[Service]
+ExecStartPre=/usr/bin/python3 /root/del_anycast_ip_frr.py -a 169.254.0.1,2001:db8:c::1[root@dns01 ~]#
+```
+
+### run the monitor script as daemon
+Copy health_check_daemonize.py under /root directory.<br>
+This script adds or removes anycast IPs based on the results of health checking.
 ```
 # ls /root/*.py
 /root/del_bgp_path.py  /root/health_check_daemonize.py
@@ -427,56 +443,106 @@ Copy health_check_daemonize.py and del_bgp_path.py under /root directory.
 Copy the unit filer config_frr_by_health_check.service under /usr/lib/systemd/system/ and issue daemon-reload to reflect that.
 ```
 # cp config_frr_by_health_check.service /usr/lib/systemd/system
+```
+
+Edit the unit file to meet your environment.
+```
+# grep ^ExecStart /usr/lib/systemd/system/config_frr_by_health_check.service
+ExecStart=/usr/bin/python3 /root/health_check_daemonize.py -t A -q www.google.com -a 169.254.0.1,2001:db8:c::1 -as 64513 -i 15
+```
+
+```
 # systemctl daemon-reload
 # systemctl enable config_frr_by_health_check.service --now
 ```
 
-Here is the routeing information after stopping DNS daemon on the DNS01 box.
-You can see the route path to the DNS01(10.33.34.10) has been removed.
+Here is the routeing information when both DNS01 and DNS02 are running.
 ```
-cumulus@cumulus:mgmt:~$ sudo vtysh -c 'show ip bgp ipv4 unicast'
-[sudo] password for cumulus:
-BGP table version is 26, local router ID is 10.33.34.254, vrf id 0
-Default local pref 100, local AS 64512
-Status codes:  s suppressed, d damped, h history, u unsorted, * valid, > best, = multipath, + multipath nhg,
-               i internal, r RIB-failure, S Stale, R Removed
-Nexthop codes: @NNN nexthop's vrf id, < announce-nh-self
-Origin codes:  i - IGP, e - EGP, ? - incomplete
-RPKI validation codes: V valid, I invalid, N Not found
+root@cumulus:mgmt:~# nv show vrf default router rib ipv4 route 169.254.0.1/32 ; nv show vrf default router rib ipv6 route 2001:db8:c::1/128
+route-entry
+==============
 
-   Network          Next Hop            Metric LocPrf Weight Path
-*> 169.254.0.1/32   10.33.34.20(dns02)
-                                             0             0 64513 i
+    Protocol - Protocol name, TblId - Table Id, NHGId - Nexthop group Id, Flags - u
+    - unreachable, r - recursive, o - onlink, i - installed, d - duplicate, c -
+    connected, A - active
 
-Displayed  1 routes and 1 total paths
-cumulus@cumulus:mgmt:~$
+    EntryIdx  Protocol  TblId  NHGId  Distance  Metric  ResolvedVia  ResolvedViaIntf  Weight  Flags
+    --------  --------  -----  -----  --------  ------  -----------  ---------------  ------  -----
+    1         bgp       254    209    20        0       10.33.34.10  swp3             1       iA
+                                                        10.33.34.20  swp3             1       iA
+route-entry
+==============
+
+    Protocol - Protocol name, TblId - Table Id, NHGId - Nexthop group Id, Flags - u
+    - unreachable, r - recursive, o - onlink, i - installed, d - duplicate, c -
+    connected, A - active
+
+    EntryIdx  Protocol  TblId  NHGId  Distance  Metric  ResolvedVia                ResolvedViaIntf  Weight  Flags
+    --------  --------  -----  -----  --------  ------  -------------------------  ---------------  ------  -----
+    1         bgp       254    204    20        0       fe80::4ee7:b222:7453:9ce9  swp3             1       iA
+                                                        fe80::8b7b:fa30:1886:3186  swp3             1       iA
+root@cumulus:mgmt:~# 
 ```
 
-After starting DNS daemon on the DNS01 box.<br>
-The route path to the DNS01 has been added.
+<br>Stop DNS daemon on DNS02.<br>
+The route path to the DNS02 has been removed.
 ```
-cumulus@cumulus:mgmt:~$ sudo vtysh -c 'show ip bgp ipv4 unicast'
-BGP table version is 27, local router ID is 10.33.34.254, vrf id 0
-Default local pref 100, local AS 64512
-Status codes:  s suppressed, d damped, h history, u unsorted, * valid, > best, = multipath, + multipath nhg,
-               i internal, r RIB-failure, S Stale, R Removed
-Nexthop codes: @NNN nexthop's vrf id, < announce-nh-self
-Origin codes:  i - IGP, e - EGP, ? - incomplete
-RPKI validation codes: V valid, I invalid, N Not found
+root@cumulus:mgmt:~# nv show vrf default router rib ipv4 route 169.254.0.1/32 ; nv show vrf default router rib ipv6 route 2001:db8:c::1/128
+route-entry
+==============
 
-   Network          Next Hop            Metric LocPrf Weight Path
-*> 169.254.0.1/32   10.33.34.20(dns02)
-                                             0             0 64513 i
-*=                  10.33.34.10(dns01)
-                                             0             0 64513 i
+    Protocol - Protocol name, TblId - Table Id, NHGId - Nexthop group Id, Flags - u
+    - unreachable, r - recursive, o - onlink, i - installed, d - duplicate, c -
+    connected, A - active
 
-Displayed  1 routes and 2 total paths
-cumulus@cumulus:mgmt:~$
+    EntryIdx  Protocol  TblId  NHGId  Distance  Metric  ResolvedVia  ResolvedViaIntf  Weight  Flags
+    --------  --------  -----  -----  --------  ------  -----------  ---------------  ------  -----
+    1         bgp       254    176    20        0       10.33.34.10  swp3             1       iA
+route-entry
+==============
+
+    Protocol - Protocol name, TblId - Table Id, NHGId - Nexthop group Id, Flags - u
+    - unreachable, r - recursive, o - onlink, i - installed, d - duplicate, c -
+    connected, A - active
+
+    EntryIdx  Protocol  TblId  NHGId  Distance  Metric  ResolvedVia                ResolvedViaIntf  Weight  Flags
+    --------  --------  -----  -----  --------  ------  -------------------------  ---------------  ------  -----
+    1         bgp       254    174    20        0       fe80::8b7b:fa30:1886:3186  swp3             1       iA
+root@cumulus:mgmt:~# 
+```
+
+<br>Start DNS daemon on DNS02.
+The route path to the DNS02 has been added.
+```
+root@cumulus:mgmt:~# nv show vrf default router rib ipv4 route 169.254.0.1/32 ; nv show vrf default router rib ipv6 route 2001:db8:c::1/128
+route-entry
+==============
+
+    Protocol - Protocol name, TblId - Table Id, NHGId - Nexthop group Id, Flags - u
+    - unreachable, r - recursive, o - onlink, i - installed, d - duplicate, c -
+    connected, A - active
+
+    EntryIdx  Protocol  TblId  NHGId  Distance  Metric  ResolvedVia  ResolvedViaIntf  Weight  Flags
+    --------  --------  -----  -----  --------  ------  -----------  ---------------  ------  -----
+    1         bgp       254    216    20        0       10.33.34.10  swp3             1       iA
+                                                        10.33.34.20  swp3             1       iA
+route-entry
+==============
+
+    Protocol - Protocol name, TblId - Table Id, NHGId - Nexthop group Id, Flags - u
+    - unreachable, r - recursive, o - onlink, i - installed, d - duplicate, c -
+    connected, A - active
+
+    EntryIdx  Protocol  TblId  NHGId  Distance  Metric  ResolvedVia                ResolvedViaIntf  Weight  Flags
+    --------  --------  -----  -----  --------  ------  -------------------------  ---------------  ------  -----
+    1         bgp       254    221    20        0       fe80::4ee7:b222:7453:9ce9  swp3             1       iA
+                                                        fe80::8b7b:fa30:1886:3186  swp3             1       iA
+root@cumulus:mgmt:~# 
 ```
 
 <br>You might want to confirm if this works when rebooting the OS as well.
 
-## Logs
+## frr logs
 
 - Cumulus linux
   - /var/log/frr/frr.log

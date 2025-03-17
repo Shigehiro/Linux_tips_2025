@@ -1,0 +1,34 @@
+frr version 8.5.3
+frr defaults traditional
+hostname ospf-dns01
+log file /var/log/frr/frr.log
+no ip forwarding
+no ipv6 forwarding
+!
+interface dummy0
+ ipv6 ospf6 area 1
+ ipv6 ospf6 authentication key-id 1 hash-algo md5 key password
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 thisisthekey
+exit
+!
+interface eth0
+ ipv6 ospf6 area 1
+ ipv6 ospf6 authentication key-id 1 hash-algo md5 key password
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 thisisthekey
+exit
+!
+router ospf6
+ ospf6 router-id 10.33.36.10
+ log-adjacency-changes detail
+ area 1 range 2001:db8:d::1/128
+ area 1 range 2001:db8:f::/64
+exit
+!
+router ospf
+ ospf router-id 10.33.36.10
+ log-adjacency-changes detail
+ network 10.33.36.0/24 area 0
+ network 169.254.0.1/32 area 0
+exit

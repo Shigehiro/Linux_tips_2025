@@ -1,0 +1,32 @@
+Building configuration...
+
+Current configuration:
+!
+frr version 8.4.3
+frr defaults datacenter
+hostname ospf-cumulus
+log syslog informational
+log timestamp precision 6
+service integrated-vtysh-config
+!
+interface swp3
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 thisisthekey
+ ipv6 ospf6 area 1
+ ipv6 ospf6 authentication key-id 1 hash-algo md5 key password
+exit
+!
+router ospf
+ ospf router-id 10.33.36.254
+ network 10.33.36.0/24 area 0
+ network 169.254.0.1/32 area 0
+exit
+!
+router ospf6
+ ospf6 router-id 10.33.36.254
+ log-adjacency-changes detail
+ area 1 range 2001:db8:d::1/128
+ area 1 range 2001:db8:f::/64
+exit
+!
+end

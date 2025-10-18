@@ -1,0 +1,41 @@
+services:
+  coredns01:
+    image: docker.io/coredns/coredns:latest
+    environment:
+      - TZ=Asia/Tokyo
+    volumes:
+      - ./Corefile:/Corefile:ro
+    networks:
+      dnstap-network:
+        ipv4_address: 172.16.10.10
+  coredns02:
+    image: docker.io/coredns/coredns:latest
+    environment:
+      - TZ=Asia/Tokyo
+    volumes:
+      - ./Corefile:/Corefile:ro
+    networks:
+      dnstap-network:
+        ipv4_address: 172.16.10.11
+  netshoot:
+    image: docker.io/nicolaka/netshoot:latest
+    tty: true
+    networks:
+      - dnstap-network
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+  dnstap:
+    image: docker.io/dmachard/dnstap-receiver:latest
+    networks:
+      - dnstap-network
+    volumes:
+      - ./dnstap.conf:/etc/dnstap_receiver/dnstap.conf:ro
+      - /etc/localtime:/etc/localtime:ro
+
+networks:
+  dnstap-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.10.0/24
+          gateway: 172.16.10.1

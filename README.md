@@ -5,3 +5,4 @@
 - [Run ESXi8 under KVM (Nested) ](./RunESXi8UnderKVM/README.md)
 - [Run snmpd with debug](./Run_snmpd_with_debug/README.md)
 - [Run knot-resolver under Podman](./RunKnotResolver_Podman/README.md)
+- [CoreDNS Remote logging with dnstap](./CoreDNS_RemoteLogging_DNSTap/README.md)

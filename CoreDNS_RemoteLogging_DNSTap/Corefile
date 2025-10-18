@@ -1,0 +1,6 @@
+. {
+    #dnstap unix:///var/run/dnstap.sock full
+    dnstap tcp://dnstap:6000 full
+    forward . 8.8.8.8
+    cache
+}

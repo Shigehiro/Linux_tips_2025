@@ -6,3 +6,4 @@
 - [Run snmpd with debug](./Run_snmpd_with_debug/README.md)
 - [Run knot-resolver under Podman](./RunKnotResolver_Podman/README.md)
 - [CoreDNS Remote logging with dnstap](./CoreDNS_RemoteLogging_DNSTap/README.md)
+- [CoreDNS DNSTap and Kafka integration](./CoreDNS_DNSTap_Kafka/README.md)

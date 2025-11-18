@@ -8,6 +8,10 @@
     - [Launch single VM with cloud-init](#launch-single-vm-with-cloud-init)
     - [Multiple VMs with cloud-init](#multiple-vms-with-cloud-init)
     - [Multiple VMs, no cloud-init](#multiple-vms-no-cloud-init)
+  - [Erros I saw](#erros-i-saw)
+    - [Can't not create a project with pulumi new behind transparent proxy](#cant-not-create-a-project-with-pulumi-new-behind-transparent-proxy)
+    - [failed to connect: authentication unavailable: no polkit agent available to authenticate action 'org.libvirt.unix.manage':](#failed-to-connect-authentication-unavailable-no-polkit-agent-available-to-authenticate-action-orglibvirtunixmanage)
+    - [error defining libvirt domain: unsupported configuration: spice graphics are not supported with this QEMU:](#error-defining-libvirt-domain-unsupported-configuration-spice-graphics-are-not-supported-with-this-qemu)
 
 ## Description
 
@@ -93,6 +97,8 @@ pulumi_network = libvirt.Network("pulumi_network",
     mode="nat")
 
 domain = libvirt.Domain("cent10",
+  type = "kvm",
+  graphics = libvirt.DomainGraphicsArgs(type="vnc"),
   autostart = False,
   cpu = {
     "mode": "host-passthrough",
@@ -255,6 +261,8 @@ cloud_init_disk = libvirt.CloudinitDisk("cloudinit-disk",
 )
 
 domain = libvirt.Domain("cent10",
+  type = "kvm",
+  graphics = libvirt.DomainGraphicsArgs(type="vnc"),
   autostart = False,
   cpu = {
     "mode": "host-passthrough",
@@ -385,6 +393,8 @@ echo "This is a shell script part." >> /tmp/cloud-init-log.txt
     )
 
     domain = libvirt.Domain(f"cent10-{i}",
+      type = "kvm",
+      graphics = libvirt.DomainGraphicsArgs(type="vnc"),
       autostart = False,
       cpu = {
         "mode": "host-passthrough",
@@ -455,6 +465,8 @@ for i in range(number_of_vms):
     )
 
     domain = libvirt.Domain(f"cent10-{i}",
+    type = "kvm",
+    graphics = libvirt.DomainGraphicsArgs(type="vnc"),
     autostart = False,
     cpu = {
         "mode": "host-passthrough",
@@ -479,4 +491,54 @@ for i in range(number_of_vms):
     pulumi.export(f"pulumi_pool-{i}", pulumi_pool.name)
     pulumi.export(f"filesystem-{i}", filesystem.name)
     pulumi.export(f"pulumi_network", pulumi_network.name)
+```
+
+## Erros I saw
+
+### Can't not create a project with pulumi new behind transparent proxy
+
+Try this.
+```
+pulumi new https://github.com/pulumi/templates/python -s python-dev --force
+```
+
+or
+
+```
+pulumi new https://github.com/pulumi/templates/python -s python --force
+```
+
+### failed to connect: authentication unavailable: no polkit agent available to authenticate action 'org.libvirt.unix.manage':
+
+When issuing pulumi up with non root users, I saw the following errors.
+```
+$ pulumi up -y
+Previewing update (python):
+     Type                   Name           Plan       Info
+ +   pulumi:pulumi:Stack    test01-python  create
+     └─ libvirt:index:Pool  pulumi_pool               1 error
+
+Diagnostics:
+  libvirt:index:Pool (pulumi_pool):
+    error: failed to connect: authentication unavailable: no polkit agent available to authenticate action 'org.libvirt.unix.manage':
+
+Resources:
+    + 1 to create
+    1 errored
+```
+
+<br>Try this.
+```
+$ sudo usermod -a -G libvirt <username>
+$ newgrp libvirt
+```
+
+### error defining libvirt domain: unsupported configuration: spice graphics are not supported with this QEMU:
+
+Add libvirt.DomainGraphicsArgs(type="vnc") in `__main__.py`.
+```
+domain = libvirt.Domain("cent10",
+  graphics = libvirt.DomainGraphicsArgs(type="vnc"),
+  type = "kvm",
+  ...
 ```

@@ -8,3 +8,4 @@
 - [CoreDNS : Remote logging with dnstap](./CoreDNS_RemoteLogging_DNSTap/README.md)
 - [CoreDNS : DNSTap and Kafka integration](./CoreDNS_DNSTap_Kafka/README.md)
 - [Pulumi : Launch VMs Pulumi and python libvirt](./Pulumi_python_libvirt/README.md)
+- [Pulumi Python libvirt: How to Assign a Static IP Address and Hostname via DHCP](./Pulumi_libvirt_tips01/README.md)
